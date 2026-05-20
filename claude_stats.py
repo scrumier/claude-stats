@@ -61,7 +61,7 @@ def fetch_local():
 def fetch_ssh(host):
     try:
         r = subprocess.run(
-            ["ssh", "-o", "ConnectTimeout=8", "-o", "StrictHostKeyChecking=no",
+            ["ssh", "-o", "ConnectTimeout=8", "-o", "StrictHostKeyChecking=accept-new",
              host, SSH_CCUSAGE],
             capture_output=True, text=True, timeout=TIMEOUT,
         )
