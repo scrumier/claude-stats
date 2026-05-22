@@ -193,11 +193,11 @@ def print_sources(sources):
     print(f"  {col('Sources', Y)}")
     for label, v in sources.items():
         if v is None:
-            print(f"    {label:<28}  {col('unavailable', DIM)}")
+            print(f"    {label:<24}  {col('unavailable', DIM)}")
         else:
             tok  = fmt_tokens(v.get("totalTokens", 0))
             cost = f"${v.get('totalCost', 0):.2f}"
-            print(f"    {label:<28}  {col(tok, DIM)}  {col(cost, P)}")
+            print(f"    {label:<24}  {col(tok, DIM)}  {col(cost, P)}")
     print()
 
 def print_local_detail(msgs):
