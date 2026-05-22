@@ -24,6 +24,7 @@ _load_env()
 
 PROJECTS    = Path(os.environ.get("CLAUDE_PROJECTS", "~/.claude/projects")).expanduser()
 SSH_SOURCES = [s.strip() for s in os.environ.get("SSH_SOURCES", "").split(",") if s.strip()]
+SSH_LABELS  = {host: f"vps{i+1}" for i, host in enumerate(SSH_SOURCES)}
 USE_LOCAL   = os.environ.get("LOCAL", "true").lower() not in ("false", "0", "no")
 SSH_CCUSAGE = os.environ.get("SSH_CCUSAGE", "~/.bun/bin/bunx --bun ccusage --json 2>/dev/null")
 TIMEOUT     = int(os.environ.get("TIMEOUT", "25"))
@@ -86,7 +87,7 @@ def gather_sources(local_msgs):
     if SSH_SOURCES:
         with ThreadPoolExecutor() as ex:
             results = ex.map(fetch_ssh, SSH_SOURCES)
-        sources.update(zip(SSH_SOURCES, results))
+        sources.update(zip([SSH_LABELS[h] for h in SSH_SOURCES], results))
     return sources
 
 
