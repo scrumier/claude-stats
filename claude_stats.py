@@ -202,17 +202,13 @@ def print_sources(sources):
 
 def print_local_detail(msgs):
     if not msgs: return
-    dates = set()
     inp = out = cr = 0
     for m in msgs:
-        dates.add(m["dt"].strftime("%Y-%m-%d"))
         inp += m["inp"]
         out += m["out"]
         cr  += m["cr"]
-    first = msgs[0]["dt"].strftime("%Y-%m-%d")
-    last  = msgs[-1]["dt"].strftime("%Y-%m-%d")
     cache = cr / max(inp + out + cr, 1) * 100
-    print(f"  {col('Local detail', Y)}  {col(f'{first} → {last}', DIM)}  {col(f'{len(dates)} active days', DIM)}")
+    print(f"  {col('Local detail', Y)}")
     print(f"  {col(fmt_tokens(inp), C)} input  {col(fmt_tokens(out), M)} output  {col(f'{cache:.0f}% cache hit', DIM)}\n")
 
 def print_models(models):
