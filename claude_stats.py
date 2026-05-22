@@ -3,6 +3,7 @@
 
 import glob, json, os, subprocess
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
@@ -50,13 +51,22 @@ def _parse_ccusage(stdout):
     except Exception:
         return None
 
-def fetch_local():
-    try:
-        r = subprocess.run(["npx", "ccusage", "--json"],
-                           capture_output=True, text=True, timeout=TIMEOUT)
-        return _parse_ccusage(r.stdout)
-    except Exception:
+def fetch_local(msgs):
+    if not msgs:
         return None
+    cost = inp = out = cr = 0
+    for m in msgs:
+        cost += m["cost"]
+        inp  += m["inp"]
+        out  += m["out"]
+        cr   += m["cr"]
+    return {
+        "totalCost":       cost,
+        "totalTokens":     inp + out + cr,
+        "inputTokens":     inp,
+        "outputTokens":    out,
+        "cacheReadTokens": cr,
+    }
 
 def fetch_ssh(host):
     try:
@@ -69,13 +79,14 @@ def fetch_ssh(host):
     except Exception:
         return None
 
-def gather_sources():
-    """Returns {label: totals_dict_or_None} for every configured source."""
+def gather_sources(local_msgs):
     sources = {}
     if USE_LOCAL:
-        sources["local"] = fetch_local()
-    for host in SSH_SOURCES:
-        sources[host] = fetch_ssh(host)
+        sources["local"] = fetch_local(local_msgs)
+    if SSH_SOURCES:
+        with ThreadPoolExecutor() as ex:
+            results = ex.map(fetch_ssh, SSH_SOURCES)
+        sources.update(zip(SSH_SOURCES, results))
     return sources
 
 
@@ -178,15 +189,18 @@ def print_sources(sources):
 
 def print_local_detail(msgs):
     if not msgs: return
+    dates = set()
+    inp = out = cr = 0
+    for m in msgs:
+        dates.add(m["dt"].strftime("%Y-%m-%d"))
+        inp += m["inp"]
+        out += m["out"]
+        cr  += m["cr"]
     first = msgs[0]["dt"].strftime("%Y-%m-%d")
     last  = msgs[-1]["dt"].strftime("%Y-%m-%d")
-    days  = len({m["dt"].strftime("%Y-%m-%d") for m in msgs})
-    total = sum(m["inp"] + m["out"] + m["cr"] for m in msgs)
-    cache = sum(m["cr"] for m in msgs) / max(total, 1) * 100
-    inp   = fmt_tokens(sum(m["inp"] for m in msgs))
-    out   = fmt_tokens(sum(m["out"] for m in msgs))
-    print(f"  {col('Local detail', Y)}  {col(f'{first} → {last}', DIM)}  {col(f'{days} active days', DIM)}")
-    print(f"  {col(inp, C)} input  {col(out, M)} output  {col(f'{cache:.0f}% cache hit', DIM)}\n")
+    cache = cr / max(inp + out + cr, 1) * 100
+    print(f"  {col('Local detail', Y)}  {col(f'{first} → {last}', DIM)}  {col(f'{len(dates)} active days', DIM)}")
+    print(f"  {col(fmt_tokens(inp), C)} input  {col(fmt_tokens(out), M)} output  {col(f'{cache:.0f}% cache hit', DIM)}\n")
 
 def print_models(models):
     if not models: return
@@ -215,8 +229,8 @@ def print_peak(bw):
 def main():
     print(f"\n{col('fetching...', DIM)}", end="\r", flush=True)
 
-    sources = gather_sources()
     msgs    = parse_local_jsonl() if USE_LOCAL else []
+    sources = gather_sources(msgs)
     bw      = peak_window(msgs)
     models  = by_model(msgs)
 
