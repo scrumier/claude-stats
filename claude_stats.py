@@ -4,7 +4,7 @@
 import glob, json, os, subprocess
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -163,6 +163,18 @@ def peak_window(msgs, window_seconds=18_000):
                 }
     return best
 
+def last_30d(msgs):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    cost = inp = out = cr = 0
+    for m in msgs:
+        if m["dt"] < cutoff:
+            continue
+        cost += m["cost"]
+        inp  += m["inp"]
+        out  += m["out"]
+        cr   += m["cr"]
+    return {"totalCost": cost, "totalTokens": inp + out + cr}
+
 def by_model(msgs):
     acc = defaultdict(lambda: {"tok": 0, "cost": 0.0, "msgs": 0})
     for m in msgs:
@@ -234,6 +246,7 @@ def main():
     sources = gather_sources(msgs)
     bw      = peak_window(msgs)
     models  = by_model(msgs)
+    l30     = last_30d(msgs)
 
     print(" " * 30, end="\r")
 
@@ -242,7 +255,10 @@ def main():
     failed     = [name for name, v in sources.items() if v is None]
 
     print(f"\n{col('━'*48, P)}")
-    print(f"  {col('All-time', DIM)}  {col(f'${total_cost:.2f}', B+G)}  {col(fmt_tokens(total_tok)+' tokens', DIM)}")
+    print(f"  {col('All-time ', DIM)}  {col(f'${total_cost:.2f}', B+G)}  {col(fmt_tokens(total_tok)+' tokens', DIM)}")
+    l30_cost = f"${l30['totalCost']:.2f}"
+    l30_tok  = fmt_tokens(l30["totalTokens"]) + " tokens"
+    print(f"  {col('Last 30d ', DIM)}  {col(l30_cost, B+G)}  {col(l30_tok, DIM)}  {col('local', DIM)}")
     for name in failed:
         print(f"  {col(f'⚠  {name} unreachable', Y)}")
     print(f"{col('━'*48, P)}\n")
