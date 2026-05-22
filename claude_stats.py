@@ -48,7 +48,18 @@ def fmt_tokens(n):
 
 def _parse_ccusage(stdout):
     try:
-        return json.loads(stdout).get("totals") or {}
+        data  = json.loads(stdout)
+        result = dict(data.get("totals") or {})
+        models = defaultdict(lambda: {"cost": 0.0, "tok": 0})
+        for day in data.get("daily", []):
+            for mb in day.get("modelBreakdowns", []):
+                name  = mb.get("modelName", "").lower()
+                label = next((k.capitalize() for k in PRICING if k in name), None)
+                if label:
+                    models[label]["cost"] += mb.get("cost", 0)
+                    models[label]["tok"]  += mb.get("inputTokens", 0) + mb.get("outputTokens", 0)
+        result["models"] = dict(models)
+        return result
     except Exception:
         return None
 
@@ -175,13 +186,17 @@ def last_30d(msgs):
         cr   += m["cr"]
     return {"totalCost": cost, "totalTokens": inp + out + cr}
 
-def by_model(msgs):
+def by_model(msgs, sources):
     acc = defaultdict(lambda: {"tok": 0, "cost": 0.0, "msgs": 0})
     for m in msgs:
         label = next((k.capitalize() for k in PRICING if k in m["model"].lower()), "Sonnet")
         acc[label]["tok"]  += m["inp"] + m["out"]
         acc[label]["cost"] += m["cost"]
         acc[label]["msgs"] += 1
+    for v in sources.values():
+        for label, stats in (v or {}).get("models", {}).items():
+            acc[label]["tok"]  += stats["tok"]
+            acc[label]["cost"] += stats["cost"]
     return dict(acc)
 
 
@@ -215,10 +230,9 @@ def print_models(models):
     if not models: return
     print(f"  {col('Models', Y)}")
     for label, s in sorted(models.items(), key=lambda x: -x[1]["cost"]):
-        if not s["msgs"]: continue
         cost_str = f"${s['cost']:6.2f}"
         tok_str  = fmt_tokens(s["tok"])
-        msg_str  = str(s["msgs"]) + " msgs"
+        msg_str  = (str(s["msgs"]) + " msgs") if s["msgs"] else ""
         print(f"    {label:<8}  {col(cost_str, P)}  {col(tok_str, DIM)}  {col(msg_str, DIM)}")
     print()
 
@@ -241,7 +255,7 @@ def main():
     msgs    = parse_local_jsonl() if USE_LOCAL else []
     sources = gather_sources(msgs)
     bw      = peak_window(msgs)
-    models  = by_model(msgs)
+    models  = by_model(msgs, sources)
     l30     = last_30d(msgs)
 
     print(" " * 30, end="\r")
@@ -254,7 +268,7 @@ def main():
     print(f"  {col('All-time ', DIM)}  {col(f'${total_cost:.2f}', B+G)}  {col(fmt_tokens(total_tok)+' tokens', DIM)}")
     l30_cost = f"${l30['totalCost']:.2f}"
     l30_tok  = fmt_tokens(l30["totalTokens"]) + " tokens"
-    print(f"  {col('Last 30d ', DIM)}  {col(l30_cost, B+G)}  {col(l30_tok, DIM)}  {col('local', DIM)}")
+    print(f"  {col('Last 30d ', DIM)}  {col(l30_cost, B+G)}  {col(l30_tok, DIM)}")
     for name in failed:
         print(f"  {col(f'⚠  {name} unreachable', Y)}")
     print(f"{col('━'*48, P)}\n")
