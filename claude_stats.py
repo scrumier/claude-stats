@@ -274,7 +274,6 @@ def main():
     print(f"{col('━'*48, P)}\n")
 
     print_sources(sources)
-    print_local_detail(msgs)
     print_models(models)
     print_peak(bw)
 
