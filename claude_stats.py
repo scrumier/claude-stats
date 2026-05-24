@@ -57,7 +57,8 @@ def _parse_ccusage(stdout):
                 label = next((k.capitalize() for k in PRICING if k in name), None)
                 if label:
                     models[label]["cost"] += mb.get("cost", 0)
-                    models[label]["tok"]  += mb.get("inputTokens", 0) + mb.get("outputTokens", 0)
+                    models[label]["tok"]  += (mb.get("inputTokens", 0) + mb.get("outputTokens", 0)
+                                             + mb.get("cacheReadTokens", 0) + mb.get("cacheCreationTokens", 0))
         result["models"] = dict(models)
         return result
     except Exception:
@@ -190,7 +191,7 @@ def by_model(msgs, sources):
     acc = defaultdict(lambda: {"tok": 0, "cost": 0.0, "msgs": 0})
     for m in msgs:
         label = next((k.capitalize() for k in PRICING if k in m["model"].lower()), "Sonnet")
-        acc[label]["tok"]  += m["inp"] + m["out"]
+        acc[label]["tok"]  += m["inp"] + m["out"] + m["cr"]
         acc[label]["cost"] += m["cost"]
         acc[label]["msgs"] += 1
     for v in sources.values():
